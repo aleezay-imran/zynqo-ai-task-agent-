@@ -1,12 +1,32 @@
 {
   "name": "zynqo-ai",
   "version": "0.1.0",
-  "private": true,
+  "description": "AI-powered personal assistant that takes action on your behalf using Model Context Protocol",
+  "author": "Zynqo AI Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madnansultandotme/zynqo-ai.git"
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "productivity",
+    "automation",
+    "mcp",
+    "model-context-protocol",
+    "task-management",
+    "nextjs",
+    "anthropic",
+    "claude"
+  ],
+  "private": false,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^2.31.0",
