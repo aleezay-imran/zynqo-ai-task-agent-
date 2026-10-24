@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { ApiResponse, TaskCreateRequest } from "@/lib/types";
+import { getSessionUser } from "@/lib/auth";
 
 // GET /api/tasks - List tasks with filtering
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const userId = searchParams.get("userId");
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
+    const userId = user.id;
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
-
-    if (!userId) {
-      return NextResponse.json<ApiResponse>(
-        { error: "userId is required" },
-        { status: 400 }
-      );
-    }
 
     const where: {
       userId: string;
@@ -46,7 +42,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as TaskCreateRequest;
 
-    if (!body.title || !body.userId) {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
+    if (!body.title) {
       return NextResponse.json<ApiResponse>(
         { error: "title and userId are required" },
         { status: 400 }
@@ -60,7 +58,7 @@ export async function POST(request: NextRequest) {
         status: body.status || "todo",
         priority: body.priority || "medium",
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        userId: body.userId,
+        userId: user.id,
       },
     });
 

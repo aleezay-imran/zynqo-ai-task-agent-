@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { ApiResponse, TaskUpdateRequest } from "@/lib/types";
+import { getSessionUser } from "@/lib/auth";
 
 // GET /api/tasks/[id] - Get single task
 export async function GET(
@@ -9,9 +10,11 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
 
-    const task = await prisma.task.findUnique({
-      where: { id },
+    const task = await prisma.task.findFirst({
+      where: { id, userId: user.id },
     });
 
     if (!task) {
@@ -38,10 +41,12 @@ export async function PUT(
 ) {
   try {
     const { id } = await context.params;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
     const body = (await request.json()) as TaskUpdateRequest;
 
-    const existingTask = await prisma.task.findUnique({
-      where: { id },
+    const existingTask = await prisma.task.findFirst({
+      where: { id, userId: user.id },
     });
 
     if (!existingTask) {
@@ -68,7 +73,7 @@ export async function PUT(
       updateData.dueDate = body.dueDate ? new Date(body.dueDate) : null;
 
     const task = await prisma.task.update({
-      where: { id },
+      where: { id, userId: user.id },
       data: updateData,
     });
 
@@ -89,9 +94,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
 
-    const existingTask = await prisma.task.findUnique({
-      where: { id },
+    const existingTask = await prisma.task.findFirst({
+      where: { id, userId: user.id },
     });
 
     if (!existingTask) {
@@ -102,7 +109,7 @@ export async function DELETE(
     }
 
     await prisma.task.delete({
-      where: { id },
+      where: { id, userId: user.id },
     });
 
     return NextResponse.json<ApiResponse>({ data: { success: true } });

@@ -13,6 +13,7 @@ export const createTaskSchema = z.object({
 
 export const updateTaskSchema = z.object({
   id: z.string().describe("Task ID to update"),
+  userId: z.string().describe("Authenticated user ID"),
   title: z.string().optional().describe("New title"),
   description: z.string().optional().describe("New description"),
   priority: z.enum(["low", "medium", "high"]).optional().describe("New priority"),
@@ -28,6 +29,7 @@ export const listTasksSchema = z.object({
 
 export const deleteTaskSchema = z.object({
   id: z.string().describe("Task ID to delete"),
+  userId: z.string().describe("Authenticated user ID"),
 });
 
 // Event Tools
@@ -67,3 +69,115 @@ export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type ListEventsInput = z.infer<typeof listEventsSchema>;
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type SearchDocumentsInput = z.infer<typeof searchDocumentsSchema>;
+
+export const toolDefinitions = [
+  {
+    name: "create-task",
+    description: "Create a task for a user.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        priority: { type: "string", enum: ["low", "medium", "high"] },
+        status: { type: "string", enum: ["todo", "in-progress", "done"] },
+        dueDate: { type: "string" },
+        userId: { type: "string" },
+      },
+      required: ["title", "userId"],
+    },
+  },
+  {
+    name: "update-task",
+    description: "Update an existing task.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        priority: { type: "string", enum: ["low", "medium", "high"] },
+        status: { type: "string", enum: ["todo", "in-progress", "done"] },
+        dueDate: { type: "string" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "list-tasks",
+    description: "List a user's tasks.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        userId: { type: "string" },
+        status: { type: "string", enum: ["todo", "in-progress", "done"] },
+        priority: { type: "string", enum: ["low", "medium", "high"] },
+      },
+      required: ["userId"],
+    },
+  },
+  {
+    name: "delete-task",
+    description: "Delete a task.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "create-event",
+    description: "Create a calendar event.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        startTime: { type: "string" },
+        endTime: { type: "string" },
+        location: { type: "string" },
+        userId: { type: "string" },
+      },
+      required: ["title", "startTime", "endTime", "userId"],
+    },
+  },
+  {
+    name: "list-events",
+    description: "List a user's calendar events.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        userId: { type: "string" },
+        startDate: { type: "string" },
+        endDate: { type: "string" },
+      },
+      required: ["userId"],
+    },
+  },
+  {
+    name: "create-document",
+    description: "Create a document.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        content: { type: "string" },
+        summary: { type: "string" },
+        userId: { type: "string" },
+      },
+      required: ["title", "content", "userId"],
+    },
+  },
+  {
+    name: "search-documents",
+    description: "Search a user's documents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        userId: { type: "string" },
+        query: { type: "string" },
+      },
+      required: ["userId", "query"],
+    },
+  },
+] as const;

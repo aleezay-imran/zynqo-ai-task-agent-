@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { ApiResponse, EventCreateRequest } from "@/lib/types";
+import { getSessionUser } from "@/lib/auth";
 
 // GET /api/events - List events with date filtering
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const userId = searchParams.get("userId");
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
+    const userId = user.id;
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
-
-    if (!userId) {
-      return NextResponse.json<ApiResponse>(
-        { error: "userId is required" },
-        { status: 400 }
-      );
-    }
 
     const where: {
       userId: string;
@@ -48,7 +44,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as EventCreateRequest;
 
-    if (!body.title || !body.userId || !body.startTime || !body.endTime) {
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
+    if (!body.title || !body.startTime || !body.endTime) {
       return NextResponse.json<ApiResponse>(
         { error: "title, userId, startTime, and endTime are required" },
         { status: 400 }
@@ -62,7 +60,7 @@ export async function POST(request: NextRequest) {
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
         location: body.location || null,
-        userId: body.userId,
+        userId: user.id,
       },
     });
 

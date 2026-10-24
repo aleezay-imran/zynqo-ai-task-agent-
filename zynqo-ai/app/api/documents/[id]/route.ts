@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { ApiResponse, DocumentUpdateRequest } from "@/lib/types";
+import { getSessionUser } from "@/lib/auth";
 
 // GET /api/documents/[id] - Get single document
 export async function GET(
@@ -9,9 +10,11 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
 
-    const document = await prisma.document.findUnique({
-      where: { id },
+    const document = await prisma.document.findFirst({
+      where: { id, userId: user.id },
     });
 
     if (!document) {
@@ -38,10 +41,12 @@ export async function PUT(
 ) {
   try {
     const { id } = await context.params;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
     const body = (await request.json()) as DocumentUpdateRequest;
 
-    const existingDocument = await prisma.document.findUnique({
-      where: { id },
+    const existingDocument = await prisma.document.findFirst({
+      where: { id, userId: user.id },
     });
 
     if (!existingDocument) {
@@ -62,7 +67,7 @@ export async function PUT(
     if (body.summary !== undefined) updateData.summary = body.summary || null;
 
     const document = await prisma.document.update({
-      where: { id },
+      where: { id, userId: user.id },
       data: updateData,
     });
 
@@ -83,9 +88,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
 
-    const existingDocument = await prisma.document.findUnique({
-      where: { id },
+    const existingDocument = await prisma.document.findFirst({
+      where: { id, userId: user.id },
     });
 
     if (!existingDocument) {
@@ -96,7 +103,7 @@ export async function DELETE(
     }
 
     await prisma.document.delete({
-      where: { id },
+      where: { id, userId: user.id },
     });
 
     return NextResponse.json<ApiResponse>({ data: { success: true } });

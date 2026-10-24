@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
@@ -78,6 +79,9 @@ export type ChatMessage = {
 };
 
 type AppContextType = {
+  currentUserId: string;
+  setCurrentUserId: (id: string) => void;
+  users: Array<{ id: string; email: string; name: string | null }>;
   // Navigation
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -355,6 +359,8 @@ const defaultWorkflows: Workflow[] = [
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [users, setUsers] = useState<Array<{ id: string; email: string; name: string | null }>>([]);
   const [activeTab, setActiveTab] = useState<string>("Overview");
   const [searchOpen, setSearchOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -401,11 +407,91 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWorkspace() {
+      try {
+        const availableUsers = await api.users.list();
+        if (cancelled || availableUsers.length === 0) return;
+        const savedUserId = localStorage.getItem("zynqo_current_user");
+        const selectedUser = availableUsers.find((user) => user.id === savedUserId) || availableUsers[0];
+        setUsers(availableUsers);
+        setCurrentUserId(selectedUser.id);
+      } catch (error) {
+        console.error("Unable to load users:", error);
+      }
+    }
+    void loadWorkspace();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    localStorage.setItem("zynqo_current_user", currentUserId);
+    let cancelled = false;
+    async function loadUserData() {
+      try {
+        const [remoteTasks, remoteEvents, remoteDocuments] = await Promise.all([
+          api.tasks.list(currentUserId),
+          api.events.list(currentUserId),
+          api.documents.list(currentUserId),
+        ]);
+        if (cancelled) return;
+        setTasks(remoteTasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          description: task.description || "",
+          done: task.status === "done",
+          priority: task.priority.toUpperCase() as Priority,
+          status: task.status === "in-progress" ? "IN_PROGRESS" : task.status.toUpperCase() as TaskStatus,
+          dueDate: task.dueDate ? new Date(task.dueDate).toLocaleString() : "",
+          tags: [],
+        })));
+        setEvents(remoteEvents.map((event) => {
+          const start = new Date(event.startTime);
+          const end = new Date(event.endTime);
+          return {
+            id: event.id,
+            title: event.title,
+            startTime: start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            endTime: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            dayIndex: (start.getDay() + 6) % 7,
+            dateStr: start.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
+            category: "MEETING" as const,
+            location: event.location || undefined,
+          };
+        }));
+        setDocuments(remoteDocuments.map((document) => ({
+          id: document.id,
+          name: document.title,
+          size: "Indexed",
+          type: "txt" as const,
+          uploadedAt: new Date(document.createdAt).toLocaleDateString(),
+          content: document.content,
+          summary: document.summary || "",
+          keyPoints: [],
+          actionItems: [],
+        })));
+      } catch (error) {
+        console.error("Unable to load workspace data:", error);
+      }
+    }
+    void loadUserData();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
+
   // Load from localStorage on client mount
   useEffect(() => {
     try {
       const storedTasks = localStorage.getItem("zynqo_tasks");
-      if (storedTasks) setTasks(JSON.parse(storedTasks));
+      if (storedTasks) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTasks(JSON.parse(storedTasks));
+      }
 
       const storedDrafts = localStorage.getItem("zynqo_drafts");
       if (storedDrafts) {
@@ -463,6 +549,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       subtasks: newTask.subtasks || [],
     };
     setTasks((prev) => [task, ...prev]);
+    if (currentUserId) {
+      void api.tasks.create({
+        title: task.title,
+        description: task.description,
+        status: task.status === "IN_PROGRESS" ? "in-progress" : task.status.toLowerCase(),
+        priority: task.priority.toLowerCase(),
+        userId: currentUserId,
+      }).then((saved) => {
+        setTasks((prev) => prev.map((item) => item.id === task.id ? { ...item, id: saved.id } : item));
+      }).catch((error) => console.error("Unable to save task:", error));
+    }
   }
 
   function toggleTask(id: string) {
@@ -477,6 +574,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : t
       )
     );
+    if (currentUserId) {
+      const task = tasks.find((item) => item.id === id);
+      if (task) void api.tasks.update(id, { status: task.done ? "todo" : "done" }).catch((error) => console.error("Unable to update task:", error));
+    }
   }
 
   function updateTaskStatus(id: string, status: TaskStatus) {
@@ -491,10 +592,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : t
       )
     );
+    if (currentUserId) void api.tasks.update(id, {
+      status: status === "IN_PROGRESS" ? "in-progress" : status.toLowerCase(),
+    }).catch((error) => console.error("Unable to update task:", error));
   }
 
   function deleteTask(id: string) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    if (currentUserId) void api.tasks.remove(id).catch((error) => console.error("Unable to delete task:", error));
   }
 
   // API Functions for backend integration
@@ -614,6 +719,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: `ev-${Date.now()}`,
     };
     setEvents((prev) => [...prev, newEvent]);
+    if (currentUserId) void api.events.create({
+      title: ev.title,
+      startTime: new Date().toISOString(),
+      endTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      location: ev.location,
+      userId: currentUserId,
+    }).catch((error) => console.error("Unable to save event:", error));
   }
 
   // Document Actions
@@ -625,6 +737,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     setDocuments((prev) => [newDoc, ...prev]);
     setSelectedDoc(newDoc);
+    if (currentUserId) void api.documents.create({
+      title: doc.name,
+      content: doc.content,
+      summary: doc.summary,
+      userId: currentUserId,
+    }).catch((error) => console.error("Unable to save document:", error));
   }
 
   // Email Actions
@@ -669,6 +787,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const lower = trimmed.toLowerCase();
 
+    if (currentUserId) {
+      try {
+        const response = await fetch("/api/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ message: trimmed }),
+        });
+        const data = (await response.json()) as {
+          reply?: string;
+          error?: string;
+          toolExecutions?: Array<{ toolName: string; params: Record<string, unknown>; output: string }>;
+        };
+        if (!response.ok) throw new Error(data.error || "Agent request failed.");
+        const execution = data.toolExecutions?.[0];
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: "assistant",
+            text: data.reply || "Action completed.",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            ...(execution ? {
+              toolExecution: {
+                toolName: execution.toolName,
+                params: execution.params,
+                status: "success" as const,
+                output: execution.output,
+              },
+            } : {}),
+          },
+        ]);
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: "assistant",
+            text: error instanceof Error ? error.message : "The agent request failed.",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }
+      return;
+    }
+
     // Natural Language Tool Execution Simulation
     if (lower.startsWith("add task") || lower.startsWith("create task") || lower.includes("remind me to")) {
       const cleanTitle = trimmed
@@ -680,12 +844,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const due = lower.includes("tomorrow") ? "Tomorrow, 2:00 PM" : "Today, 5:00 PM";
 
       const createdTitle = cleanTitle || "New AI Scheduled Task";
-      addTask({
-        title: createdTitle,
-        priority,
-        dueDate: due,
-        tags: ["agent", priority.toLowerCase()],
-      });
+      if (currentUserId) {
+        try {
+          const output = await api.mcp.call("create-task", {
+            title: createdTitle,
+            priority: priority.toLowerCase(),
+            status: "todo",
+            userId: currentUserId,
+          });
+          const taskId = output.match(/ID:\s*([^\s]+)/i)?.[1] || `mcp-task-${Date.now()}`;
+          setTasks((prev) => [
+            {
+              id: taskId,
+              title: createdTitle,
+              description: "",
+              done: false,
+              priority,
+              status: "TODO",
+              dueDate: due,
+              tags: ["agent", priority.toLowerCase()],
+              subtasks: [],
+            },
+            ...prev,
+          ]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg-${Date.now() + 1}`,
+              role: "assistant",
+              text: `I've created the task "${createdTitle}" with ${priority} priority through MCP.`,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              toolExecution: {
+                toolName: "create-task",
+                params: { title: createdTitle, priority: priority.toLowerCase(), status: "todo" },
+                status: "success",
+                output,
+              },
+            },
+          ]);
+        } catch (error) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg-${Date.now() + 1}`,
+              role: "assistant",
+              text: error instanceof Error ? error.message : "The MCP task operation failed.",
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              toolExecution: {
+                toolName: "create-task",
+                params: { title: createdTitle },
+                status: "failed",
+                output: "MCP operation failed.",
+              },
+            },
+          ]);
+        }
+        return;
+      }
 
       setTimeout(() => {
         setMessages((prev) => [
@@ -704,6 +919,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           },
         ]);
       }, 500);
+      return;
+    }
+
+    if (currentUserId && (lower.includes("list my tasks") || lower.includes("show my tasks") || lower === "list tasks")) {
+      try {
+        const output = await api.mcp.call("list-tasks", { userId: currentUserId });
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: "assistant",
+            text: output === "[]" ? "You have no tasks." : `Here are your tasks:\n\n${output}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            toolExecution: {
+              toolName: "list-tasks",
+              params: {},
+              status: "success",
+              output: "Tasks loaded from the authenticated MCP workspace.",
+            },
+          },
+        ]);
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now() + 1}`,
+            role: "assistant",
+            text: error instanceof Error ? error.message : "The MCP task query failed.",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }
       return;
     }
 
@@ -826,6 +1073,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
+        currentUserId,
+        setCurrentUserId,
+        users,
         activeTab,
         setActiveTab,
         searchOpen,

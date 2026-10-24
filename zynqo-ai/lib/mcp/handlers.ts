@@ -45,6 +45,11 @@ export async function handleUpdateTask(input: UpdateTaskInput) {
   if (input.priority !== undefined) updateData.priority = input.priority;
   if (input.dueDate !== undefined) updateData.dueDate = input.dueDate ? new Date(input.dueDate) : null;
 
+  const existingTask = await prisma.task.findFirst({
+    where: { id: input.id, userId: input.userId },
+  });
+  if (!existingTask) throw new Error("Task not found");
+
   const task = await prisma.task.update({
     where: { id: input.id },
     data: updateData,
@@ -78,8 +83,8 @@ export async function handleListTasks(input: ListTasksInput) {
 }
 
 export async function handleDeleteTask(input: DeleteTaskInput) {
-  await prisma.task.delete({
-    where: { id: input.id },
+  await prisma.task.deleteMany({
+    where: { id: input.id, userId: input.userId },
   });
 
   return {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { ApiResponse, UserUpdateRequest } from "@/lib/types";
+import { getSessionUser } from "@/lib/auth";
 
 // GET /api/users/[id] - Get user profile
 export async function GET(
@@ -9,6 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
+    const sessionUser = await getSessionUser();
+    if (!sessionUser || sessionUser.id !== id) return NextResponse.json<ApiResponse>({ error: "Forbidden" }, { status: 403 });
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -46,6 +49,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await context.params;
+    const sessionUser = await getSessionUser();
+    if (!sessionUser || sessionUser.id !== id) return NextResponse.json<ApiResponse>({ error: "Forbidden" }, { status: 403 });
     const body = (await request.json()) as UserUpdateRequest;
 
     const existingUser = await prisma.user.findUnique({
@@ -61,12 +66,12 @@ export async function PUT(
 
     const updateData: {
       email?: string;
-      name?: string | null;
+      name?: string;
       passwordHash?: string | null;
     } = {};
 
     if (body.email !== undefined) updateData.email = body.email;
-    if (body.name !== undefined) updateData.name = body.name || null;
+    if (body.name !== undefined) updateData.name = body.name || "";
     if (body.passwordHash !== undefined)
       updateData.passwordHash = body.passwordHash || null;
 
@@ -100,6 +105,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
+    const sessionUser = await getSessionUser();
+    if (!sessionUser || sessionUser.id !== id) return NextResponse.json<ApiResponse>({ error: "Forbidden" }, { status: 403 });
 
     const existingUser = await prisma.user.findUnique({
       where: { id },

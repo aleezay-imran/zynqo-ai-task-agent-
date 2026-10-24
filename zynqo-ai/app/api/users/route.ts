@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { ApiResponse, UserCreateRequest } from "@/lib/types";
+import { getSessionUser } from "@/lib/auth";
 
 // GET /api/users - List users (placeholder for admin functionality)
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const email = searchParams.get("email");
-
-    const where: { email?: string } = {};
-    if (email) where.email = email;
-
+    const user = await getSessionUser();
+    if (!user) return NextResponse.json<ApiResponse>({ error: "Authentication required" }, { status: 401 });
     const users = await prisma.user.findMany({
-      where,
+      where: { id: user.id },
       select: {
         id: true,
         email: true,
@@ -60,7 +57,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.create({
       data: {
         email: body.email,
-        name: body.name || null,
+        name: body.name || "",
         passwordHash: body.passwordHash || null,
       },
       select: {
