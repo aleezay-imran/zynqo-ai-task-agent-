@@ -26,21 +26,33 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "db:seed": "node --experimental-strip-types prisma/seed.ts"
   },
   "dependencies": {
+    "@better-auth/prisma-adapter": "^1.7.12",
     "@google/genai": "^2.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@modelcontextprotocol/server": "^2.3.1",
+    "@prisma/adapter-pg": "^7.4.2",
+    "@prisma/client": "7.4.2",
+    "better-auth": "^1.7.12",
+    "ci": "^2.3.0",
     "next": "16.4.2",
+    "pg": "^8.16.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "prisma": "7.4.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
